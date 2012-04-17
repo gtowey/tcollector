@@ -183,9 +183,39 @@ def main(argv):
       if is_numeric(value):
         printmetric("transport." + stat, value)
     # New in ES 0.17:
-    for stat, value in nstats.get("http", {}).iteritems():
-      if is_numeric(value):
-        printmetric("http." + stat, value)
+    if major >= 0 and minor >= 17:
+      for stat, value in nstats.get("http", {}).iteritems():
+        if is_numeric(value):
+          printmetric("http." + stat, value)
+    # New in ES 0.19:
+    if major >= 0 and minor >= 19:
+      jvm = nstats["jvm"]
+      for gc, d in jvm["mem"]["pools"].iteritems():
+        gc = gc.encode("ascii","ignore").replace(" ","_")
+        printmetric("jvm.mem.pools", d["used_in_bytes"], gc=gc, type="used")
+        printmetric("jvm.mem.pools", d["max_in_bytes"], gc=gc, type="max")
+        printmetric("jvm.mem.pools", d["peak_max_in_bytes"], gc=gc, type="peak")
+      t = nstats["thread_pool"]
+      for p, d in t.iteritems():
+        printmetric("thread.pool.threads", d["threads"], pool=p)
+        printmetric("thread.pool.queue", d["queue"], pool=p)
+        printmetric("thread.pool.active", d["active"], pool=p)
+      fs = nstats["fs"]["data"]
+      for id, data in enumerate(fs):
+        mount = data["mount"]
+        dev = data["dev"].encode("ascii","ignore").split("/")[-1]
+        printmetric("data.total", data["total_in_bytes"], mount=mount, device=dev)
+        printmetric("data.free", data["free_in_bytes"], mount=mount, device=dev)
+        printmetric("data.available", data["available_in_bytes"], mount=mount, device=dev)
+        printmetric("data.reads", data["disk_reads"], mount=mount, device=dev)
+        printmetric("data.read.size", data["disk_read_size_in_bytes"], mount=mount, device=dev)
+        printmetric("data.writes", data["disk_writes"], mount=mount, device=dev)
+        printmetric("data.write.size", data["disk_write_size_in_bytes"], mount=mount, device=dev)
+        printmetric("data.disk.queue", data["disk_queue"], mount=mount, device=dev)
+        printmetric("data.disk.service_time", data["disk_service_time"], mount=mount, device=dev)
+      del jvm
+      del t
+      del fs
     del nstats
     time.sleep(COLLECTION_INTERVAL)
 
