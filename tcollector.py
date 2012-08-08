@@ -993,9 +993,16 @@ def spawn_collector(col):
     # FIXME: do custom integration of Python scripts into memory/threads
     # if re.search('\.py$', col.name) is not None:
     #     ... load the py module directly instead of using a subprocess ...
-    col.lastspawn = int(time.time())
-    col.proc = subprocess.Popen(col.filename, stdout=subprocess.PIPE,
+    try:
+        col.proc = subprocess.Popen(col.filename, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
+    except OSError, e:
+        LOG.error('Failed to spawn collector %s: %s' % (col.filename, e))
+        return
+    # The following line needs to move below this line because it is used in
+    # other logic and it makes no sense to update the last spawn time if the
+    # collector didn't actually start.
+    col.lastspawn = int(time.time())
     set_nonblocking(col.proc.stdout.fileno())
     set_nonblocking(col.proc.stderr.fileno())
     if col.proc.pid > 0:
