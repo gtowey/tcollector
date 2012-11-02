@@ -43,10 +43,7 @@ from optparse import OptionParser
 # global variables.
 COLLECTORS = {}
 GENERATION = 0
-<<<<<<< HEAD
 NOT_SET = -1
-=======
->>>>>>> master
 DEFAULT_LOG = '/var/log/tcollector.log'
 LOG = logging.getLogger('tcollector')
 ALIVE = True
