@@ -43,7 +43,10 @@ from optparse import OptionParser
 # global variables.
 COLLECTORS = {}
 GENERATION = 0
+<<<<<<< HEAD
 NOT_SET = -1
+=======
+>>>>>>> master
 DEFAULT_LOG = '/var/log/tcollector.log'
 LOG = logging.getLogger('tcollector')
 ALIVE = True
@@ -307,6 +310,10 @@ class ReaderThread(threading.Thread):
         """Parses the given line and appends the result to the reader queue."""
 
         col.lines_received += 1
+        if len(line) >= 1024:  # Limit in net.opentsdb.tsd.PipelineFactory
+            LOG.warning('%s line too long: %s', col.name, line)
+            col.lines_invalid += 1
+            return
         parsed = re.match('^([-_./a-zA-Z0-9]+)\s+' # Metric name.
                           '(\d+)\s+'               # Timestamp.
                           '(\S+?)'                 # Value (int or float).
@@ -658,14 +665,13 @@ def parse_cmdline(argv):
                            'values of old data points to save memory. '
                            'default=%default')
     parser.add_option('--max-bytes', dest='max_bytes', type='int',
-                      default=1000000,
+                      default=64 * 1024 * 1024,
                       help='Maximum bytes per a logfile.')
     parser.add_option('--backup-count', dest='backup_count', type='int',
-                      default=NOT_SET,
-                      help='Maximum number of logfiles to backup.')
+                      default=0, help='Maximum number of logfiles to backup.')
     parser.add_option('--logfile', dest='logfile', type='str',
-                      default='/var/log/tcollector.log',
-                      help='Filename where logs are written to.') 
+                      default=DEFAULT_LOG,
+                      help='Filename where logs are written to.')
     (options, args) = parser.parse_args(args=argv[1:])
     if options.dedupinterval < 2:
       parser.error('--dedup-interval must be at least 2 seconds')
@@ -679,7 +685,8 @@ def main(argv):
     """The main tcollector entry point and loop."""
 
     options, args = parse_cmdline(argv)
-    setup_logging(options.logfile, options.max_bytes, options.backup_count)
+    setup_logging(options.logfile, options.max_bytes or None,
+                  options.backup_count or None)
 
     if options.verbose:
         LOG.setLevel(logging.DEBUG)  # up our level
@@ -738,6 +745,7 @@ def main(argv):
         register_collector(StdinCollector())
         stdin_loop(options, modules, sender, tags)
     else:
+        sys.stdin.close()
         main_loop(options, modules, sender, tags)
     LOG.debug('Shutting down -- joining the reader thread.')
     reader.join()
@@ -988,9 +996,16 @@ def spawn_collector(col):
     # FIXME: do custom integration of Python scripts into memory/threads
     # if re.search('\.py$', col.name) is not None:
     #     ... load the py module directly instead of using a subprocess ...
-    col.lastspawn = int(time.time())
-    col.proc = subprocess.Popen(col.filename, stdout=subprocess.PIPE,
+    try:
+        col.proc = subprocess.Popen(col.filename, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE)
+    except OSError, e:
+        LOG.error('Failed to spawn collector %s: %s' % (col.filename, e))
+        return
+    # The following line needs to move below this line because it is used in
+    # other logic and it makes no sense to update the last spawn time if the
+    # collector didn't actually start.
+    col.lastspawn = int(time.time())
     set_nonblocking(col.proc.stdout.fileno())
     set_nonblocking(col.proc.stderr.fileno())
     if col.proc.pid > 0:
