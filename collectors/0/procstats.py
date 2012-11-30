@@ -106,6 +106,18 @@ def main():
             if m:
                 print ("proc.meminfo.%s %d %s"
                         % (m.group(1).lower(), ts, m.group(2)))
+                if m.group(1) == "MemTotal":
+                    memtotal = float(m.group(2))
+                if m.group(1) == "MemFree":
+                    memfree = float(m.group(2))
+                    perc_memused = ((memtotal - memfree)/memtotal)*100
+                    print "proc.meminfo.perc_memused %d %s" % (ts, perc_memused)
+                if m.group(1) == "SwapTotal":
+                    swaptotal = float(m.group(2))
+                if m.group(1) == "SwapFree":
+                    swapfree = float(m.group(2))
+                    perc_swapused = ((swaptotal - swapfree)/swaptotal)*100
+                    print "proc.meminfo.perc_swapused %d %s" % (ts, perc_swapused)
 
         # proc.vmstat
         f_vmstat.seek(0)
@@ -134,6 +146,20 @@ def main():
                 print "proc.stat.cpu %d %s type=iowait" % (ts, fields[4])
                 print "proc.stat.cpu %d %s type=irq" % (ts, fields[5])
                 print "proc.stat.cpu %d %s type=softirq" % (ts, fields[6])
+
+                user_time = float(fields[0])
+                nice_time = float(fields[1])
+                system_time = float(fields[2])
+                idle_time = float(fields[3])
+                total_time = user_time + nice_time + system_time + idle_time
+                p_user = (user_time/total_time)*100
+                p_nice = (nice_time/total_time)*100
+                p_system = (system_time/total_time)*100
+
+                print ("proc.stat.cpu.perc_user %d %s" % (ts, str(p_user)))
+                print ("proc.stat.cpu.perc_nice %d %s" % (ts, str(p_nice)))
+                print ("proc.stat.cpu.perc_system %d %s" % (ts, str(p_system)))
+
                 # really old kernels don't have this field
                 if len(fields) > 7:
                     print ("proc.stat.cpu %d %s type=guest"
