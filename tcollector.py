@@ -336,6 +336,7 @@ class ReaderThread(threading.Thread):
             return
         metric, timestamp, value, tags = parsed.groups()
         timestamp = int(timestamp)
+        verb = 'put'
 
         # De-dupe detection...  To reduce the number of points we send to the
         # TSD, we suppress sending values of metrics that don't change to
@@ -356,6 +357,9 @@ class ReaderThread(threading.Thread):
                           col.values[key][3], timestamp, value, col.name)
                 col.lines_invalid += 1
                 return
+            elif timestamp == col.values[key][3]:
+                LOG.info("Changing verb to inc")
+                verb = 'inc'
 
             # if this data point is repeated, store it but don't send.
             # store the previous timestamp, so when/if this value changes
@@ -385,7 +389,7 @@ class ReaderThread(threading.Thread):
         # The array consists of:
         # [ the metric's value, if this value was repeated, the line of data,
         #   the value's timestamp that it last changed ]
-        col.values[key] = (value, False, line, timestamp)
+        col.values[key] = (value, False, verb + ' ' + line, timestamp)
         col.lines_sent += 1
         if not self.readerq.nput(line):
             self.lines_dropped += 1
@@ -585,7 +589,7 @@ class SenderThread(threading.Thread):
         # construct the output string
         out = ''
         for line in self.sendq:
-            line = 'put ' + line + self.tagstr
+            line = line + self.tagstr
             out += line + '\n'
             LOG.debug('SENDING: %s', line)
 
@@ -618,11 +622,11 @@ def setup_logging(logfile=DEFAULT_LOG, max_bytes=None, backup_count=NOT_SET):
 
     LOG.setLevel(logging.INFO)
     if backup_count > NOT_SET:
-      # setup log rotation handler
-      ch = RotatingFileHandler(logfile, 'a', max_bytes, backup_count)
+        # setup log rotation handler
+        ch = RotatingFileHandler(logfile, 'a', max_bytes, backup_count)
     else:
-      # setup stream handler
-      ch = logging.StreamHandler(sys.stdout)
+        # setup stream handler
+        ch = logging.StreamHandler(sys.stdout)
 
     ch.setFormatter(logging.Formatter('%(asctime)s %(name)s[%(process)d] '
                                       '%(levelname)s: %(message)s'))
@@ -688,10 +692,10 @@ def parse_cmdline(argv):
                       help='Path to configuration file')
     (options, args) = parser.parse_args(args=argv[1:])
     if options.dedupinterval < 2:
-      parser.error('--dedup-interval must be at least 2 seconds')
+        parser.error('--dedup-interval must be at least 2 seconds')
     if options.evictinterval <= options.dedupinterval:
-      parser.error('--evict-interval must be strictly greater than '
-                   '--dedup-interval')
+        parser.error('--evict-interval must be strictly greater than '
+                     '--dedup-interval')
     return (options, args)
 
 
@@ -704,7 +708,7 @@ def main(argv):
                   options.backup_count or None)
 
     if options.verbose:
-        LOG.setLevel(logging.DEBUG)  # up our level
+        LOG.setLevel(logging.WARNING)  # up our level
 
     if options.pidfile:
         write_pid(options.pidfile)
@@ -856,12 +860,12 @@ def load_config_module(name, options, tags):
     """
 
     if isinstance(name, str):
-      LOG.info('Loading %s', name)
-      d = {}
-      # Strip the trailing .py
-      module = __import__(name[:-3], d, d)
+        LOG.info('Loading %s', name)
+        d = {}
+        # Strip the trailing .py
+        module = __import__(name[:-3], d, d)
     else:
-      module = reload(name)
+        module = reload(name)
     onload = module.__dict__.get('onload')
     if callable(onload):
         try:
@@ -963,7 +967,7 @@ def shutdown_signal(signum, frame):
 
 
 def kill(proc, signum=signal.SIGTERM):
-  os.killpg(proc.pid, signum)
+    os.killpg(proc.pid, signum)
 
 
 def shutdown():
