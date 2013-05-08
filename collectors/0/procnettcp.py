@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # This file is part of tcollector.
-# Copyright (C) 2010  StumbleUpon, Inc.
+# Copyright (C) 2010  The tcollector Authors.
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as published by
@@ -49,10 +49,11 @@
 # example, they will always show user=root.
 
 import os
+import pwd
 import sys
 import time
-import socket
-import pwd
+
+from collectors.lib import utils
 
 
 USERS = ("root", "www-data", "mysql")
@@ -118,22 +119,6 @@ TCPSTATES = {
     "0B": "closing",
     }
 
-# If we're running as root and this user exists, we'll drop privileges.
-USER = "nobody"
-
-
-def drop_privileges():
-    try:
-        ent = pwd.getpwnam(USER)
-    except KeyError:
-        return
-
-    if os.getuid() != 0:
-        return
-
-    os.setgid(ent.pw_gid)
-    os.setuid(ent.pw_uid)
-
 
 def is_public_ip(ipstr):
     """
@@ -158,7 +143,6 @@ def is_public_ip(ipstr):
 
 def main(unused_args):
     """procnettcp main loop"""
-    drop_privileges()
     try:           # On some Linux kernel versions, with lots of connections
       os.nice(19)  # this collector can be very CPU intensive.  So be nicer.
     except OSError, e:
@@ -190,6 +174,7 @@ def main(unused_args):
         print >>sys.stderr, "Failed to open input file: %s" % (e,)
         return 13  # Ask tcollector to not re-start us immediately.
 
+    utils.drop_privileges()
     while True:
         counter = {}
 

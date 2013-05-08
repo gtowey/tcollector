@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # This file is part of tcollector.
-# Copyright (C) 2010  StumbleUpon, Inc.
+# Copyright (C) 2010  The tcollector Authors.
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as published by
@@ -13,7 +13,6 @@
 # see <http://www.gnu.org/licenses/>.
 
 import os
-import pwd
 import re
 import signal
 import subprocess
@@ -27,7 +26,7 @@ USER = "hadoop"
 
 # We add those files to the classpath if they exist.
 CLASSPATH = [
-    "/usr/lib/jvm/java-6-sun/lib/tools.jar",
+    "/usr/lib/jvm/java-1.6.0-openjdk-1.6.0.0.x86_64/lib/tools.jar",
 ]
 
 # We shorten certain strings to avoid excessively long metric names.
@@ -38,19 +37,6 @@ JMX_SERVICE_RENAMING = {
     # New in 0.92.1, from HBASE-5325:
     "org.apache.hbase": "hbase",
 }
-
-def drop_privileges():
-    try:
-        ent = pwd.getpwnam(USER)
-    except KeyError:
-        print >>sys.stderr, "Not running, user '%s' doesn't exist" % USER
-        sys.exit(13)
-
-    if os.getuid() != 0:
-        return
-
-    os.setgid(ent.pw_gid)
-    os.setuid(ent.pw_uid)
 
 
 def kill(proc):
@@ -78,7 +64,7 @@ def do_on_signal(signum, func, *args, **kwargs):
 
 
 def main(argv):
-    drop_privileges()
+    utils.drop_privileges(user=USER)
     # Build the classpath.
     dir = os.path.dirname(sys.argv[0])
     jar = os.path.normpath(dir + "/../lib/jmx-1.0.jar")
@@ -96,7 +82,7 @@ def main(argv):
          "-Xmx64m",  # Low RAM limit, to avoid stealing too much from prod.
          "-cp", classpath, "com.stumbleupon.monitoring.jmx",
          "--watch", "10", "--long", "--timestamp",
-         "HRegionServer",  # Name of the process.
+         "HMaster",  # Name of the process.
          # The remaining arguments are pairs (mbean_regexp, attr_regexp).
          # The first regexp is used to match one or more MBeans, the 2nd
          # to match one or more attributes of the MBeans matched.
@@ -155,6 +141,8 @@ def main(argv):
             # etc, which makes it easier to graph things with the TSD.
             if metric.endswith("MinTime"):  # We don't care about the minimum
                 continue                    # time taken by operations.
+            elif metric.startswith("tbl."): # Per-table/region/cf metrics
+                continue                    # ignore for now, too much spam
             elif metric.endswith("NumOps"):
                 tags = " op=" + metric[:-6]
                 metric = "numOps"

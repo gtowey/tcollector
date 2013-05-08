@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # This file is part of tcollector.
-# Copyright (C) 2011  StumbleUpon, Inc.
+# Copyright (C) 2011  The tcollector Authors.
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as published by
@@ -57,35 +57,16 @@ Metrics from /proc/net/netstat (`netstat -s' command):
   - net.stat.tcp.syncookies: SYN cookies (both sent & received).
 """
 
-import os
-import pwd
 import re
 import resource
 import sys
 import time
 
-# If we're running as root and this user exists, we'll drop privileges.
-USER = "nobody"
-
-
-def drop_privileges():
-    """Drops privileges if running as root."""
-    try:
-        ent = pwd.getpwnam(USER)
-    except KeyError:
-        return
-
-    if os.getuid() != 0:
-        return
-
-    os.setgid(ent.pw_gid)
-    os.setuid(ent.pw_uid)
-
+from collectors.lib import utils
 
 
 def main():
     """Main loop"""
-    drop_privileges()
     sys.stdin.close()
 
     interval = 15
@@ -98,6 +79,7 @@ def main():
     except IOError, e:
         print >>sys.stderr, "open failed: %s" % e
         return 13  # Ask tcollector to not re-start us.
+    utils.drop_privileges()
 
     # Note: up until v2.6.37-rc2 most of the values were 32 bits.
     # The first value is pretty useless since it accounts for some

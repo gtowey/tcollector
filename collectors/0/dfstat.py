@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # This file is part of tcollector.
-# Copyright (C) 2010  StumbleUpon, Inc.
+# Copyright (C) 2010  The tcollector Authors.
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as published by
@@ -32,18 +32,19 @@
 # "/foo/bar/" and "/foo_bar/".
 
 
-import os
-import socket
 import subprocess
 import sys
 import time
 
+from collectors.lib import utils
 
 COLLECTION_INTERVAL = 60  # seconds
+
 
 def main():
     """dfstats main loop"""
 
+    utils.drop_privileges()
     while True:
         ts = int(time.time())
         # 1kblocks
