@@ -737,6 +737,9 @@ def parse_cmdline(argv):
     parser.add_option('--logfile', dest='logfile', type='str',
                       default=DEFAULT_LOG,
                       help='Filename where logs are written to.')
+    parser.add_option('--config-refresh-interval', dest='config_refresh_interval', type='int',
+                      default=0,
+                      help='Force refresh of configuration files every N seconds')
     parser.add_option('--config', dest='config', type='str',
                       default=False,
                       help='Path to configuration file')
@@ -914,22 +917,29 @@ def stdin_loop(options, modules, sender, tags):
 
     global ALIVE
     next_heartbeat = int(time.time() + 600)
+    if options.config_refresh_interval:
+        next_config_refresh = int(time.time() + options.config_refresh_interval);
     while ALIVE:
         time.sleep(15)
-        reload_changed_config_modules(modules, options, sender, tags)
         now = int(time.time())
         if now >= next_heartbeat:
             LOG.info('Heartbeat (%d collectors running)'
                      % sum(1 for col in all_living_collectors()))
             next_heartbeat = now + 600
+        if options.config_refresh_interval and now > next_config_refresh:
+            LOG.info('Refreshing config')
+            reload_changed_config_modules(modules, options, sender, tags, True)
+        else:
+            reload_changed_config_modules(modules, options, sender, tags)
 
 def main_loop(options, modules, sender, tags):
     """The main loop of the program that runs when we're not in stdin mode."""
 
     next_heartbeat = int(time.time() + 600)
+    if options.config_refresh_interval:
+        next_config_refresh = int(time.time() + options.config_refresh_interval);
     while ALIVE:
         populate_collectors(options.cdir)
-        reload_changed_config_modules(modules, options, sender, tags)
         reap_children()
         spawn_children()
         time.sleep(15)
@@ -938,7 +948,11 @@ def main_loop(options, modules, sender, tags):
             LOG.info('Heartbeat (%d collectors running)'
                      % sum(1 for col in all_living_collectors()))
             next_heartbeat = now + 600
-
+        if options.config_refresh_interval and now > next_config_refresh:
+            LOG.info('Refreshing config')
+            reload_changed_config_modules(modules, options, sender, tags, True)
+        else:
+            reload_changed_config_modules(modules, options, sender, tags)
 
 def list_config_modules(etcdir):
     """Returns an iterator that yields the name of all the config modules."""
@@ -993,7 +1007,7 @@ def load_config_module(name, options, tags):
     return module
 
 
-def reload_changed_config_modules(modules, options, sender, tags):
+def reload_changed_config_modules(modules, options, sender, tags, force_update=False):
     """Reloads any changed modules from the 'etc' directory.
 
     Args:
@@ -1013,7 +1027,7 @@ def reload_changed_config_modules(modules, options, sender, tags):
         if path not in current_paths:  # Module was removed.
             continue
         mtime = os.path.getmtime(path)
-        if mtime > timestamp:
+        if mtime > timestamp or force_update:
             LOG.info('Reloading %s, file has changed', path)
             module = load_config_module(module, options, tags)
             modules[path] = (module, mtime)
